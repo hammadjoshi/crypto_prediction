@@ -6,7 +6,8 @@ import matplotlib
 matplotlib.use('Agg')
 #matplotlib.pyplot.switch_backend('Agg')
 import matplotlib.pyplot as plt
-
+import requests
+import json
 
 
 
@@ -19,6 +20,29 @@ def getAllCryptoNames(request):
     return HttpResponse("All crypto names")
 
 def currentValues(request):
+    def get_cryptocurrency_data(symbol, interval='15m', limit=10):
+        url = f'https://api.binance.com/api/v1/klines?symbol={symbol}&interval={interval}&limit={limit}'
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = json.loads(response.text)
+           # return data
+            print('dat----',data)
+            return HttpResponse("current values of BTC, ETH, ADA, DOT",response,response.status_code)
+
+        else:
+            print(f"Failed to fetch data. Status code: {response.status_code}")
+            return HttpResponse("current values of BTC, ETH, ADA, DOT",'in else')
+
+    # Example usage
+    symbol = 'BTCUSDT'  # Example: Bitcoin/USDT pair
+    data = get_cryptocurrency_data(symbol)
+    if data:
+        print("One-minute interval cryptocurrency data:")
+        return HttpResponse("current values of BTC, ETH, ADA, DOT   ")
+
+    #   print(data)
+
+
    # BTC_Ticker = yf.Ticker("BTC-AUD")
     #BTC_Data = BTC_Ticker.history(period="max")
     #feature = []
@@ -54,7 +78,6 @@ def currentValues(request):
    #plt.show()
 
 
-   return HttpResponse("current values of BTC, ETH, ADA, DOT   ")
 
 
 
