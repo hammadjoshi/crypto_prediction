@@ -123,7 +123,7 @@ def getBTCValue(request):
 
 
 def get_btc_yfinance():
-    print('here3')
+    print('here33')
 
     BTC_Ticker = yf.Ticker("BTC-USD")
     BTC_Data = BTC_Ticker.history(period="max")
