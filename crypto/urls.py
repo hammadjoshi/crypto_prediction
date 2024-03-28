@@ -23,6 +23,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.index, name='index'),
     path('getAllCryptoNames', views.getAllCryptoNames, name='getAllCryptoNames'),
-        path('currentValues', views.currentValues, name='currentValues')
+    path('currentValues', views.currentValues, name='currentValues'),
+    path('getBTCValue', views.getBTCValue, name='getBTCValue'),
+
+
 
 ]
