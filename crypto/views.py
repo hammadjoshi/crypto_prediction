@@ -8,18 +8,22 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import requests
 import json
-
-
-from django.http    import HttpResponse
-import numpy as np
-from tensorflow.keras.models import Sequential
-from keras.layers import *
+from datetime import datetime, timedelta
 
 from sklearn.preprocessing import MinMaxScaler
+from django.http    import HttpResponse
+import numpy as np
+from keras.layers import *
+
 import matplotlib.pyplot as plt
 import pandas as pd
 #import pandas_datareader as web
-import datetime as dt
+#import datetime as dt
+
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.layers import Dense, Dropout,LSTM
+from tensorflow.keras.models import Sequential
+
 
 
 
@@ -96,30 +100,54 @@ def currentValues(request):
 
 
 def getBTCValue(request):
-    get_btc_yfinance()
+  #  get_btc_yfinance()
+    symbol = 'BTCUSDT'
+    data = get_btc_binance(symbol)
+    if data:
+        print("Historical data for BTC/USDT:")
+        print("new DATA",data)
+
     return HttpResponse("BTC HERE")
 
 
-# def get_historical_data(symbol, interval='1d', limit=720):
-#     base_url = 'https://api.binance.com/api/v1/klines'
-#     end_time = dt.now()
-#     start_time = end_time - timedelta(days=365)
-#     start_timestamp = int(start_time.timestamp()) * 1000
-#     end_timestamp = int(end_time.timestamp()) * 1000
-#     url = f'{base_url}?symbol={symbol}&interval={interval}&startTime={start_timestamp}&endTime={end_timestamp}&limit={limit}'
-#     response = requests.get(url)
-#     if response.status_code == 200:
-#         data = json.loads(response.text)
-#         return data
-#     else:
-#         print(f"Failed to fetch data. Status code: {response.status_code}")
-#         return None
+def get_btc_binance(symbol, interval='1m', limit=1):
+    base_url = 'https://api.binance.com/api/v1/klines'
+    end_time = datetime.now()
+    start_time = end_time - timedelta(days=365)
+    start_timestamp = int(start_time.timestamp()) * 1000
+    end_timestamp = int(end_time.timestamp()) * 1000
+    url = f'{base_url}?symbol={symbol}&interval={interval}&startTime={start_timestamp}&endTime={end_timestamp}&limit={limit}'
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = json.loads(response.text)
+        for item in data:
+            start_interval_timestamp = datetime.utcfromtimestamp(item[0] / 1000)
+            opening = float(item[1])
+            highest = float(item[2])
+            lowest = float(item[3])
+            closing = float(item[4])
+            volume = float(item[5])
+            end_interval_timestamp = datetime.utcfromtimestamp(item[6] / 1000)
+       # print(data)
+        print('______------>>',opening,highest,lowest,closing)
+        return data
+    else:
+        print(f"Failed to fetch data. Status code: {response.status_code}")
+        return None
 
-# symbol = 'BTCUSDT'
-# data = get_historical_data(symbol)
-# if data:
-#     print("Historical data for BTC/USDT:")
-#     print(data)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def get_btc_yfinance():
@@ -137,7 +165,7 @@ def get_btc_yfinance():
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(BTC_Data['Close'].values.reshape(-1, 1))
 
-    prediction_days = 2
+    prediction_days = 60
     x_train, y_train = [], []
 
     print(scaled_data)
@@ -156,9 +184,19 @@ def get_btc_yfinance():
     model.add(LSTM(units=50, return_sequences=True))
     model.add(Dropout(0.2))
     model.add(LSTM(units=50))
+    model.add(Dense(units=1000))
+
+    model.compile(optimizer='adam' , loss='mean_squared_error')
+    print("+++++++++++++",x_train)
+    print("------------->>",y_train)
+    model.fit(x_train,y_train, epochs=25, batch_size=32)
+
+
     print("End")
     # model.add(Dropout(0.2))
 
+
+    return
 
 
 
