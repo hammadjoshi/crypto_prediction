@@ -25,7 +25,7 @@ urlpatterns = [
     path('getAllCryptoNames', views.getAllCryptoNames, name='getAllCryptoNames'),
     path('currentValues', views.currentValues, name='currentValues'),
     path('getBTCValue', views.getBTCValue, name='getBTCValue'),
-    path("prediction", include("prediction.urls"))
+    path("", include("prediction.urls"))
 
 ]
 
