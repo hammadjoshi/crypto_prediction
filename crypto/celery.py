@@ -5,7 +5,6 @@ from celery import Celery
 from django.conf import settings
 from celery.schedules import crontab
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crypto.settings')
 
 app = Celery('crypto')
 app.conf.enable_utc = False
@@ -16,7 +15,13 @@ app.config_from_object(settings, namespace='CELERY')
 
 # Celery Beat Settings @shared_task(bind=True)
 
+app.conf.beat_schedule = {
+    'fetch_1_minute_data': {
+        'task': 'crypto.tasks.fetch_1_minute_data',  # Replace with the actual path to your first task
+        'schedule': 60,  # Fetch data every 60 seconds (1 minute)
+    }
 
+}
 # Celery Schedules - https://docs.celeryproject.org/en/stable/reference/celery.schedules.html
 
 app.autodiscover_tasks()

@@ -7,6 +7,11 @@ import json
 import requests
 from .tasks import *
 
+# fetch_1_minute_data()
+
+
+
+
 from django.http    import HttpResponse
 
 
@@ -14,7 +19,7 @@ def home(request):
     return HttpResponse("I'm prediction app'")
 
 def celeryTest(request):
-    sleepy()
+    fetch_1_minute_data()
     return HttpResponse("I'm celery Test'")
 
 def ajass(request):
@@ -30,7 +35,7 @@ def MinuteDataView(APIView):
         serializer = MinuteCryptoDataSerializer(minute_data, many=True)
         print(len(serializer.data))
         print("___++++++++",serializer.data)
-        return HttpResponse("I'm prediction app ajajajak'",serializer.data)
+        return HttpResponse("Im prediction app ajajajak ", len(serializer.data))
         #return Response(serializer.data)
 
 

@@ -136,9 +136,34 @@ CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379'
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Australia/Perth'
+CELERY_TIMEZONE = 'UTC'
+
+from celery import Celery
+app = Celery('your_app_name')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks('crypto')
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 from celery.schedules import crontab
+
+# CELERY_BEAT_SCHEDULE = {
+#     'fetch_1_minute_data': {
+#         'task': 'crypto.tasks.fetch_1_minute_data',  # Replace with the actual path to your first task
+#         'schedule': 60,  # Fetch data every 60 seconds (1 minute)
+#     }
+#
+# }
+
+CELERY_BEAT_SCHEDULE = {
+      'add-every-30-seconds': {
+        'task': 'prediction.tasks.add',
+        'schedule': 30.0,
+        'args': (16, 16),
+        'options': {
+            'expires': 15.0,
+        },
+    },
+}
+
 
 
