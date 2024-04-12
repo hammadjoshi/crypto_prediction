@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'django_celery_beat',
 
+
 ]
 
 MIDDLEWARE = [
@@ -138,13 +139,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
-from celery import Celery
-app = Celery('your_app_name')
-app.config_from_object('django.conf:settings', namespace='CELERY')
-app.autodiscover_tasks('crypto')
+# from celery import Celery
+# app = Celery('crypto')
+# app.config_from_object('django.conf:settings', namespace='CELERY')
+# app.autodiscover_tasks('crypto')
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
-from celery.schedules import crontab
+#from celery.schedules import crontab
 
 # CELERY_BEAT_SCHEDULE = {
 #     'fetch_1_minute_data': {
