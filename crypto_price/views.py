@@ -14,13 +14,13 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import load_model
 from django.utils import timezone
 from keras.initializers import Orthogonal
-import requests
-
-from django.http import HttpResponse
-
+from rest_framework import status
+from .tasks import *
+# fetch_1_minute_data()
+# fetch_1_day_data()
 # Define custom objects dictionary with the custom initializer
-
-def load_and_predict(model_path, data, time_steps, num_days):
+# train_data()
+def load_and_predict(model_path, data, time_steps, minutes):
     # Load the model
     print("checkpoint 1")
     custom_objects = {'Orthogonal': Orthogonal}
@@ -34,11 +34,11 @@ def load_and_predict(model_path, data, time_steps, num_days):
     scaled_data = scaler.fit_transform(data.reshape(-1, 1))
 
     # Predict next days
-    predicted_prices = predict_next_days(model, scaled_data, scaler, time_steps, num_days)
+    predicted_prices = predict_next_minutes(model, scaled_data, scaler, time_steps, minutes)
 
     return predicted_prices
 
-def predict_next_days(model, data, scaler, time_steps, num_days):
+def predict_next_minutes(model, data, scaler, time_steps, minutes):
     # Copy the original data
     input_data = data.copy()
 
@@ -46,7 +46,7 @@ def predict_next_days(model, data, scaler, time_steps, num_days):
     predicted_prices = []
 
     # Iterate over the number of days
-    for _ in range(num_days):
+    for _ in range(minutes):
         # Prepare the input data for prediction
         input_sequence = input_data[-time_steps:]
         input_sequence_scaled = scaler.transform(input_sequence.reshape(-1, 1))
@@ -82,7 +82,6 @@ class DailyDataView(APIView):
 
         # Serialize the data
         serializer = DailyCryptoDataSerializer(daily_data, many=True)
-        print(len(serializer.data))
 
         return Response(serializer.data)
 
@@ -103,19 +102,19 @@ def generate_date_sequence(start_date, num_days):
 class PredictionView(APIView):
     def get(self, request):
         # Get num_days from query parameters
-        num_days = request.query_params.get('num_days')
+        minutes = request.query_params.get('minutes')
 
-        if not num_days:
-            return Response({"error": "num_days parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not minutes:
+            return Response({"error": "minutes parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            num_days = int(num_days)
+            minutes = int(minutes)
         except ValueError:
-            return Response({"error": "num_days must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "minutes must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Load daily data from the database for the previous 3 months
         end_date = timezone.now()
-        start_date = end_date - timedelta(days=90)  # Previous 3 months
+        start_date = end_date - timedelta(minutes=90)  # Previous 3 months
         daily_data = DailyCryptoData.objects.filter(start_interval_timestamp__range=(start_date, end_date)).order_by('start_interval_timestamp')
 
         # Serialize the data
@@ -131,11 +130,11 @@ class PredictionView(APIView):
         time_steps = 10  # Replace with your actual time steps
 
         # Call the load_and_predict function to generate predictions
-        predicted_prices = load_and_predict(model_path, data, time_steps, num_days)
+        predicted_prices = load_and_predict(model_path, data, time_steps, minutes)
 
         start_date = date.today() - timedelta(days=len(data))  # Assuming today is the last day in the previous data
         previous_dates = generate_date_sequence(start_date, len(data))
-        next_dates = generate_date_sequence(start_date + timedelta(days=len(data)), num_days)
+        next_dates = generate_date_sequence(start_date + timedelta(days=len(data)), minutes)
 
         # Combine dates with predicted prices
         previous_data = list(zip(previous_dates, data))
@@ -149,74 +148,75 @@ class PredictionView(APIView):
         return Response(response_data)
 
 
+def save_daily_data_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            # Parse datetime string
+            start_interval_timestamp_str = row['start_interval_Timestamp']
+            end_interval_timestamp_str = row['end_interval_Timestamp']
 
-def createDailyData(request):
-    interval = "1M"
-    limit = 200
-    symbol = 'BTCUSDT'
-    base_url = 'https://api.binance.us/api/v1/klines'
-    url = f'https://api.binance.us/api/v1/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        for item in data:
-            start_interval_timestamp = datetime.utcfromtimestamp(item[0] / 1000)
-            opening = float(item[1])
-            highest = float(item[2])
-            lowest = float(item[3])
-            closing = float(item[4])
-            volume = float(item[5])
-            end_interval_timestamp = datetime.utcfromtimestamp(item[6] / 1000)
+            # Remove milliseconds if present
+            if '.' in start_interval_timestamp_str:
+                start_interval_timestamp_str = start_interval_timestamp_str.split('.')[0]
+            if '.' in end_interval_timestamp_str:
+                end_interval_timestamp_str = end_interval_timestamp_str.split('.')[0]
 
+            # Parse datetime string to datetime object
+            start_interval_timestamp = datetime.strptime(start_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+            end_interval_timestamp = datetime.strptime(end_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+
+            opening = float(row['Opening'])
+            highest = float(row['Highest'])
+            lowest = float(row['Lowest'])
+            closing = float(row['Closing'])
+            volume = float(row['Volume'])
+
+            # Save data to model
             DailyCryptoData.objects.create(
-                    start_interval_timestamp=start_interval_timestamp,
-                    opening=opening,
-                    highest=highest,
-                    lowest=lowest,
-                    closing=closing,
-                    volume=volume,
-                    end_interval_timestamp=end_interval_timestamp
-                )
-        print("Day data len---->", len(data))
+                start_interval_timestamp=start_interval_timestamp,
+                opening=opening,
+                highest=highest,
+                lowest=lowest,
+                closing=closing,
+                volume=volume,
+                end_interval_timestamp=end_interval_timestamp
+            )
+            print("row created")
+            
+def save_1_day_data_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            # Parse datetime string
+            start_interval_timestamp_str = row['start_interval_Timestamp']
+            end_interval_timestamp_str = row['end_interval_Timestamp']
 
-        print("Day data---->",data)
-        return HttpResponse("I'm prediction app ajajajak'",data)
-    else:
-        print(f"Failed to fetch data. Status code: {response.status_code}")
-        return HttpResponse("I'm prediction app ajajajak'")
+            # Remove milliseconds if present
+            if '.' in start_interval_timestamp_str:
+                start_interval_timestamp_str = start_interval_timestamp_str.split('.')[0]
+            if '.' in end_interval_timestamp_str:
+                end_interval_timestamp_str = end_interval_timestamp_str.split('.')[0]
 
+            # Parse datetime string to datetime object
+            start_interval_timestamp = datetime.strptime(start_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+            end_interval_timestamp = datetime.strptime(end_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
 
-def createMinuteData(request):
-    interval = "30m"
-    limit = 200
-    symbol = 'BTCUSDT'
-    base_url = 'https://api.binance.us/api/v1/klines'
-    url = f'https://api.binance.us/api/v1/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        for item in data:
-            start_interval_timestamp = datetime.utcfromtimestamp(item[0] / 1000)
-            opening = float(item[1])
-            highest = float(item[2])
-            lowest = float(item[3])
-            closing = float(item[4])
-            volume = float(item[5])
-            end_interval_timestamp = datetime.utcfromtimestamp(item[6] / 1000)
+            opening = float(row['Opening'])
+            highest = float(row['Highest'])
+            lowest = float(row['Lowest'])
+            closing = float(row['Closing'])
+            volume = float(row['Volume'])
 
+            # Save data to model
             MinuteCryptoData.objects.create(
-                    start_interval_timestamp=start_interval_timestamp,
-                    opening=opening,
-                    highest=highest,
-                    lowest=lowest,
-                    closing=closing,
-                    volume=volume,
-                    end_interval_timestamp=end_interval_timestamp
-                )
-        print("Day data len---->", len(data))
-
-        print("Day data---->",data)
-        return HttpResponse("I'm prediction app ajajajak'",data)
-    else:
-        print(f"Failed to fetch data. Status code: {response.status_code}")
-        return HttpResponse("I'm prediction app ajajajak'")
+                start_interval_timestamp=start_interval_timestamp,
+                opening=opening,
+                highest=highest,
+                lowest=lowest,
+                closing=closing,
+                volume=volume,
+                end_interval_timestamp=end_interval_timestamp
+            )
+            print("row created")           
+# save_1_day_data_from_csv('static/cryptocurrency_data_11day.csv')

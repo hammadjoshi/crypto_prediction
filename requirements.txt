@@ -1,8 +1,13 @@
 django
 djangorestframework
+redis 
+celery
 numpy
 scikit-learn
 keras==3.1.1
-
+django-celery-beat
+django-celery-results
+keras
+scikit-learn
 #download redis for celery
 #https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.msi
