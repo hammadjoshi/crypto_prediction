@@ -1,1 +1,3 @@
 python manage.py runserver
+celery -A crypto_price_prediction worker --pool=threads -l info
+celery -A crypto_price_prediction beat -l info
