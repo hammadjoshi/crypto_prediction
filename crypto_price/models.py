@@ -17,3 +17,9 @@ class MinuteCryptoData(models.Model):
     closing = models.DecimalField(max_digits=20, decimal_places=10)
     volume = models.DecimalField(max_digits=20, decimal_places=10)
     end_interval_timestamp = models.DateTimeField()
+    
+    
+class prediction_data(models.Model):
+    timestamp = models.DateTimeField(primary_key=True)
+    orignal_value = models.DecimalField(max_digits=20, decimal_places=10,default=0)
+    predicted_value = models.DecimalField(max_digits=20, decimal_places=10,default=0)

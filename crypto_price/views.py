@@ -14,13 +14,28 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import load_model
 from django.utils import timezone
 from keras.initializers import Orthogonal
-import requests
+from rest_framework import status
+from .tasks import *
+from .models import *
+from pytz import timezone as pytz_timezone
+from datetime import datetime
+import pytz
 
-from django.http import HttpResponse
+# Assuming you have your model and serializer already defined
+# from .models import MinuteCryptoData
+# from .serializers import MinuteCryptoDataSerializer
 
+def convert_to_timezone(dt, tz_name):
+    """
+    Convert a UTC datetime object to a specified timezone.
+    """
+    tz = pytz_timezone(tz_name)
+    return dt.astimezone(tz)
+# fetch_1_minute_data()
+# fetch_1_day_data()
 # Define custom objects dictionary with the custom initializer
-
-def load_and_predict(model_path, data, time_steps, num_days):
+# train_data()
+def load_and_predict(model_path, data, time_steps, minutes):
     # Load the model
     print("checkpoint 1")
     custom_objects = {'Orthogonal': Orthogonal}
@@ -30,15 +45,16 @@ def load_and_predict(model_path, data, time_steps, num_days):
     # model = load_model(model_path)
     print("checkpoint 2")
     # Scale the data
+    print(data.shape,data)
     scaler = MinMaxScaler()
     scaled_data = scaler.fit_transform(data.reshape(-1, 1))
 
     # Predict next days
-    predicted_prices = predict_next_days(model, scaled_data, scaler, time_steps, num_days)
+    predicted_prices = predict_next_minutes(model, scaled_data, scaler, time_steps, minutes)
 
     return predicted_prices
 
-def predict_next_days(model, data, scaler, time_steps, num_days):
+def predict_next_minutes(model, data, scaler, time_steps, minutes):
     # Copy the original data
     input_data = data.copy()
 
@@ -46,7 +62,7 @@ def predict_next_days(model, data, scaler, time_steps, num_days):
     predicted_prices = []
 
     # Iterate over the number of days
-    for _ in range(num_days):
+    for _ in range(minutes):
         # Prepare the input data for prediction
         input_sequence = input_data[-time_steps:]
         input_sequence_scaled = scaler.transform(input_sequence.reshape(-1, 1))
@@ -79,45 +95,145 @@ class DailyDataView(APIView):
         daily_data = DailyCryptoData.objects.filter(
             start_interval_timestamp__range=(start_date, end_date)
         )
-
+        
         # Serialize the data
         serializer = DailyCryptoDataSerializer(daily_data, many=True)
-        print(len(serializer.data))
 
         return Response(serializer.data)
 
 class MinuteDataView(APIView):
     def get(self, request):
         # Query MinuteCryptoData for the most recent 1-minute data
-        minute_data = MinuteCryptoData.objects.all().order_by('-start_interval_timestamp')
+        try:
+            minute_data = MinuteCryptoData.objects.all().order_by('-start_interval_timestamp')
+            print("minute_data",minute_data)
+            # Serialize the data
+            australia_tz = 'Australia/ACT'
+            for item in minute_data:
+                item.start_interval_timestamp = item.start_interval_timestamp+timedelta(hours=8)
 
-        # Serialize the data
-        serializer = MinuteCryptoDataSerializer(minute_data, many=True)
+                print(item.start_interval_timestamp)
+            serializer = MinuteCryptoDataSerializer(minute_data, many=True)
 
-        return Response(serializer.data)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)})
 
-def generate_date_sequence(start_date, num_days):
-    # Generate a sequence of dates starting from the given start_date
-    return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(num_days)]
+def generate_date_sequence(start_date, num_minutes):
+    # Generate a sequence of timestamps starting from the given start_date
+    return [(start_date + timedelta(minutes=i)).strftime('%H:%M:%S') for i in range(num_minutes)]
+
 
 class PredictionView(APIView):
     def get(self, request):
         # Get num_days from query parameters
-        num_days = request.query_params.get('num_days')
+        data=prediction_data.objects.all().order_by('timestamp')
+        # if data.count()>90:
+        #     data=data[:90]
+        # else:
+        #     pass
+        data=data[:data.count()-1]
+        response_data=prediction_serializer(data,many=True).data
+       
 
-        if not num_days:
-            return Response({"error": "num_days parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(response_data)
+
+
+def save_daily_data_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            # Parse datetime string
+            start_interval_timestamp_str = row['start_interval_Timestamp']
+            end_interval_timestamp_str = row['end_interval_Timestamp']
+
+            # Remove milliseconds if present
+            if '.' in start_interval_timestamp_str:
+                start_interval_timestamp_str = start_interval_timestamp_str.split('.')[0]
+            if '.' in end_interval_timestamp_str:
+                end_interval_timestamp_str = end_interval_timestamp_str.split('.')[0]
+
+            # Parse datetime string to datetime object
+            start_interval_timestamp = datetime.strptime(start_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+            end_interval_timestamp = datetime.strptime(end_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+
+            opening = float(row['Opening'])
+            highest = float(row['Highest'])
+            lowest = float(row['Lowest'])
+            closing = float(row['Closing'])
+            volume = float(row['Volume'])
+
+            # Save data to model
+            DailyCryptoData.objects.create(
+                start_interval_timestamp=start_interval_timestamp,
+                opening=opening,
+                highest=highest,
+                lowest=lowest,
+                closing=closing,
+                volume=volume,
+                end_interval_timestamp=end_interval_timestamp
+            )
+            print("row created")
+            
+def save_1_day_data_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            # Parse datetime string
+            start_interval_timestamp_str = row['start_interval_Timestamp']
+            end_interval_timestamp_str = row['end_interval_Timestamp']
+
+            # Remove milliseconds if present
+            if '.' in start_interval_timestamp_str:
+                start_interval_timestamp_str = start_interval_timestamp_str.split('.')[0]
+            if '.' in end_interval_timestamp_str:
+                end_interval_timestamp_str = end_interval_timestamp_str.split('.')[0]
+
+            # Parse datetime string to datetime object
+            start_interval_timestamp = datetime.strptime(start_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+            end_interval_timestamp = datetime.strptime(end_interval_timestamp_str, '%Y-%m-%d %H:%M:%S')
+
+            opening = float(row['Opening'])
+            highest = float(row['Highest'])
+            lowest = float(row['Lowest'])
+            closing = float(row['Closing'])
+            volume = float(row['Volume'])
+
+            # Save data to model
+            MinuteCryptoData.objects.create(
+                start_interval_timestamp=start_interval_timestamp,
+                opening=opening,
+                highest=highest,
+                lowest=lowest,
+                closing=closing,
+                volume=volume,
+                end_interval_timestamp=end_interval_timestamp
+            )
+            print("row created")
+
+
+
+class MinutePredictionView(APIView):
+    def get(self, request):
+        # Get num_days from query parameters
+        minutes = request.query_params.get('minutes')
+
+        if not minutes:
+            return Response({"error": "minutes parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            num_days = int(num_days)
+            minutes = int(minutes)
         except ValueError:
-            return Response({"error": "num_days must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "minutes must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Load daily data from the database for the previous 3 months
         end_date = timezone.now()
-        start_date = end_date - timedelta(days=90)  # Previous 3 months
-        daily_data = DailyCryptoData.objects.filter(start_interval_timestamp__range=(start_date, end_date)).order_by('start_interval_timestamp')
-
+        start_date = end_date - timedelta(minutes=90)  # Previous 3 months
+        print(start_date,end_date)
+        # daily_data = DailyCryptoData.objects.filter(start_interval_timestamp__range=(start_date, end_date)).order_by('start_interval_timestamp')
+        daily_data=MinuteCryptoData.objects.all().order_by('-start_interval_timestamp')[:90]
+        print(daily_data)
         # Serialize the data
         serializer = DailyCryptoDataSerializer(daily_data, many=True)
 
@@ -131,12 +247,13 @@ class PredictionView(APIView):
         time_steps = 10  # Replace with your actual time steps
 
         # Call the load_and_predict function to generate predictions
-        predicted_prices = load_and_predict(model_path, data, time_steps, num_days)
-
-        start_date = date.today() - timedelta(days=len(data))  # Assuming today is the last day in the previous data
-        previous_dates = generate_date_sequence(start_date, len(data))
-        next_dates = generate_date_sequence(start_date + timedelta(days=len(data)), num_days)
-
+        predicted_prices = load_and_predict(model_path, data, time_steps, minutes)
+        print(minutes)
+        end_time = datetime.now()
+        # Generate time sequence for the previous 90 minutes
+        previous_dates = generate_date_sequence(end_time - timedelta(minutes=len(data)), len(data))
+        next_dates = generate_date_sequence(end_time , minutes)
+        print("next_dates: ", next_dates)
         # Combine dates with predicted prices
         previous_data = list(zip(previous_dates, data))
         next_data = list(zip(next_dates, predicted_prices))
@@ -148,75 +265,9 @@ class PredictionView(APIView):
         response_data = [{"date": date, "price": price} for date, price in combined_data]
         return Response(response_data)
 
-
-
-def createDailyData(request):
-    interval = "1M"
-    limit = 200
-    symbol = 'BTCUSDT'
-    base_url = 'https://api.binance.us/api/v1/klines'
-    url = f'https://api.binance.us/api/v1/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        for item in data:
-            start_interval_timestamp = datetime.utcfromtimestamp(item[0] / 1000)
-            opening = float(item[1])
-            highest = float(item[2])
-            lowest = float(item[3])
-            closing = float(item[4])
-            volume = float(item[5])
-            end_interval_timestamp = datetime.utcfromtimestamp(item[6] / 1000)
-
-            DailyCryptoData.objects.create(
-                    start_interval_timestamp=start_interval_timestamp,
-                    opening=opening,
-                    highest=highest,
-                    lowest=lowest,
-                    closing=closing,
-                    volume=volume,
-                    end_interval_timestamp=end_interval_timestamp
-                )
-        print("Day data len---->", len(data))
-
-        print("Day data---->",data)
-        return HttpResponse("I'm prediction app ajajajak'",data)
-    else:
-        print(f"Failed to fetch data. Status code: {response.status_code}")
-        return HttpResponse("I'm prediction app ajajajak'")
-
-
-def createMinuteData(request):
-    interval = "30m"
-    limit = 200
-    symbol = 'BTCUSDT'
-    base_url = 'https://api.binance.us/api/v1/klines'
-    url = f'https://api.binance.us/api/v1/klines?symbol={symbol}&interval={interval}&limit={limit}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        for item in data:
-            start_interval_timestamp = datetime.utcfromtimestamp(item[0] / 1000)
-            opening = float(item[1])
-            highest = float(item[2])
-            lowest = float(item[3])
-            closing = float(item[4])
-            volume = float(item[5])
-            end_interval_timestamp = datetime.utcfromtimestamp(item[6] / 1000)
-
-            MinuteCryptoData.objects.create(
-                    start_interval_timestamp=start_interval_timestamp,
-                    opening=opening,
-                    highest=highest,
-                    lowest=lowest,
-                    closing=closing,
-                    volume=volume,
-                    end_interval_timestamp=end_interval_timestamp
-                )
-        print("Day data len---->", len(data))
-
-        print("Day data---->",data)
-        return HttpResponse("I'm prediction app ajajajak'",data)
-    else:
-        print(f"Failed to fetch data. Status code: {response.status_code}")
-        return HttpResponse("I'm prediction app ajajajak'")
+from .tasks import *
+# minute_prediction()
+# minute_prediction()           
+# save_1_day_data_from_csv('static/cryptocurrency_data_11day.csv')
+# fetch_1_day_data()
+# fetch_1_minute_data()
