@@ -10,7 +10,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'crypto_price_prediction.setting
 app = Celery('crypto_price_prediction')
 app.conf.enable_utc = False
 # TIME_ZONE = ''
-app.conf.update(timezone = 'Asia/Karachi')
+app.conf.update(timezone = 'Australia/Perth')
 
 app.config_from_object(settings, namespace='CELERY')
 

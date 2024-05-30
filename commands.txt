@@ -1,3 +1,20 @@
+1-
+Install python
+https://www.python.org/downloads/
+
+2-
+Insall PIP
+python -m pip install -U pip
+
+3- 
+Install Django
+pip install django
+
+
+
+
+
+
 python manage.py runserver
 celery -A crypto_price_prediction worker --pool=threads -l info
 celery -A crypto_price_prediction beat -l info

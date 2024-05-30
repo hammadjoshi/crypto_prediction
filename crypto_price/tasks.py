@@ -17,6 +17,8 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import load_model
 from keras.initializers import Orthogonal
 import pytz
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 def load_and_predict(model_path, data, time_steps, minutes):
     # Load the model
     print("checkpoint 1")
@@ -105,6 +107,24 @@ def train_data(self):
         os.remove("static/cryptocurrency_lstm_model_new.keras")
     # Save the trained model
     history=model.save('static/cryptocurrency_lstm_model_new.keras')
+    predicted_prices=model.predict(X_train)
+    rmse = np.sqrt(mean_squared_error(y_train, predicted_prices))
+    print(f'RMSE: {rmse}')
+
+    # Plot actual vs. predicted values
+    plt.figure(figsize=(10, 6))
+    plt.plot(y_train, label='Actual Values')
+    plt.plot(predicted_prices, label='Predicted Values', color='red')
+    plt.title('Actual vs Predicted Values')
+    plt.xlabel('Time')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.savefig(f"static/{datetime.strftime(datetime.now(),'%H_%M_%S')}.png")
+    return rmse
+   
+
+
+
 @shared_task(bind=True)
 def fetch_1_minute_data(self):
     interval="1m"

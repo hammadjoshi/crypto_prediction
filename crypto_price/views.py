@@ -265,6 +265,11 @@ class MinutePredictionView(APIView):
         response_data = [{"date": date, "price": price} for date, price in combined_data]
         return Response(response_data)
 
+
+
+
+
+
 from .tasks import *
 # minute_prediction()
 # minute_prediction()           
