@@ -189,11 +189,15 @@
                 var layout = {
                     title: title,
                     xaxis: {
-                        type: 'date'
+                        type: 'date',
+                        rangeslider: {
+		                    visible: false
+	                                 }
                     },
                     yaxis: {
                         title: 'Price'
-                    }
+                    },
+
                 };
 
                 var plotData = [trace];

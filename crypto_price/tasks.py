@@ -18,6 +18,7 @@ from keras.models import load_model
 from keras.initializers import Orthogonal
 import pytz
 from sklearn.metrics import mean_squared_error
+import glob
 import matplotlib.pyplot as plt
 def load_and_predict(model_path, data, time_steps, minutes):
     # Load the model
@@ -119,7 +120,10 @@ def train_data(self):
     plt.xlabel('Time')
     plt.ylabel('Value')
     plt.legend()
-    plt.savefig(f"static/{datetime.strftime(datetime.now(),'%H_%M_%S')}.png")
+    #files = glob.glob('static/rmse')
+    #for f in files:
+     #   os.remove(f)
+    plt.savefig(f"static/rmse/{datetime.strftime(datetime.now(),'%H_%M_%S')}.png")
     return rmse
    
 
