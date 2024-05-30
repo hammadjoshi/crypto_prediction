@@ -20,7 +20,7 @@
     <div class="container mt-5">
         <div class="row">
             <div class="col-md-12">
-                <h3>Prediction Line Chart</h3>
+                <h3>Prediction Line Chart Comparison</h3>
                 
                 <div id="predictionChart" style="width: 100%; height: 400px;"></div>
                 
@@ -245,8 +245,17 @@
               
                     const layout = {
                       title: "Original vs. Predicted Values",
-                      xaxis: { title: "Formatted Timestamp" },
-                      yaxis: { title: "Value" }
+                      xaxis: { title: "" },
+                      yaxis: { title: "Value" },
+                
+            margin: {
+              
+                b: 100,
+                t: 50,
+                pad: 10
+            },
+         
+            plot_bgcolor: '#c7c7c7'
                     };
               
                     Plotly.newPlot('predictionChart', chartData, layout);
